@@ -1,4 +1,4 @@
-import { error, parseBasic, typeShow } from "npm:tiny-ts-parser";
+import { error, parseBasic, typeShow, parseBasic2 } from "npm:tiny-ts-parser";
 type Type =
 | { tag: "Boolean" }
 | { tag: "Number" }
@@ -14,10 +14,10 @@ type Term =
 | { tag: "func"; params: Param[]; body: Term }
 | { tag: "call"; func: Term; args: Term[] }
 //| { tag: "seq"; body: Term; rest: Term }
-| { tag: "const"; name: string; init: Term; rest: Term }
+//| { tag: "const"; name: string; init: Term; rest: Term }
   //seq2: restがない const2: restがない
 | { tag: "seq2"; body: Term[] }
-//| { tag: "const2"; names: string[]; inits: Term[] };
+| { tag: "const2"; names: string[]; inits: Term[] };
 
 type Param = { name: string; type: Type };
 type TypeEnv = Record<string, Type>;
@@ -94,33 +94,26 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
     //   typecheck(t.body, tyEnv);
     //   return typecheck(t.rest, tyEnv);
     // }
-    case "const": {
-      const ty = typecheck(t.init, tyEnv);
-      const newTyEnv = { ...tyEnv, [t.name]: ty };
-      return typecheck(t.rest, newTyEnv);
-    }
-    case "seq2": {
-      let currentTyEnv = { ...tyEnv };
-      for (const bodyTerm of t.body) {
-        return typecheck(bodyTerm, currentTyEnv);
-      }
-    }
-    // case "const2": {
-    //   if (t.names.length !== t.inits.length) {
-    //     error("number of names and inits must be the same", t);
-    //   }
-    //   let currentTyEnv = { ...tyEnv };
-    //   for (let i = 0; i < t.names.length; i++) {
-    //     const name = t.names[i];
-    //     const init = t.inits[i];
-    //     const ty = typecheck(init, currentTyEnv);
-    //     currentTyEnv = { ...currentTyEnv, [name]: ty };
-    //   }
+    // case "const": {
+    //   const ty = typecheck(t.init, tyEnv);
+    //   const newTyEnv = { ...tyEnv, [t.name]: ty };
+    //   return typecheck(t.rest, newTyEnv);
     // }
+    case "seq2": {
+      let lastTy: Type | null = null;
+      for (const term of t.body) {
+        if (term.tag === "const2"){
+          const ty = typecheck(term.init, tyEnv);
+          tyEnv = { ...tyEnv, [term.name]: ty };
+        } else {
+          lastTy = typecheck(term, tyEnv);
+        }
+      }
+      return lastTy!;
+    }
+    case "const2":
+      throw "unreachable";
   }
 }
-// console.dir(typecheck(parseBasic(`
-//   (f: (x: number) => boolean) => f
-//   `), {}), { depth: null });
 
-console.log(typecheck(parseBasic(`const x = 1`), {}));
+console.log(typecheck(parseBasic2(`const x = 1;`), {}));
