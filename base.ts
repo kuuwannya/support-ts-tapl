@@ -99,10 +99,4 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
     }
   }
 }
-console.log(typecheck(parseBasic(`
-  const add = (x: number, y: number) => x + y;
-  const select = (b: boolean, x: number, y: number) => b ? x : y;
-  const x = add(1, add(2, 3));
-  const y = select(true, x, x);
-  y;
-  `), {}));
+console.log(typecheck(parseBasic(`12345 ? true : false`), {}));
