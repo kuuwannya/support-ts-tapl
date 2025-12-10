@@ -1,5 +1,4 @@
-import { error, parseBasic } from "npm:tiny-ts-parser";
-
+import { error, parseBasic, typeShow } from "npm:tiny-ts-parser";
 type Type =
 | { tag: "Boolean" }
 | { tag: "Number" }
@@ -99,4 +98,10 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
     }
   }
 }
-console.log(typecheck(parseBasic(`12345 ? true : false`), {}));
+// console.dir(typecheck(parseBasic(`
+//   (f: (x: number) => boolean) => f
+//   `), {}), { depth: null });
+
+console.log(typeShow(typecheck(parseBasic(`
+  (f: (x: number) => boolean) => f
+  `), {})));
