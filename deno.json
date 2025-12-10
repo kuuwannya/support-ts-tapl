@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "@typescript-eslint/typescript-estree":
+      "npm:@typescript-eslint/typescript-estree"
+  }
+}
