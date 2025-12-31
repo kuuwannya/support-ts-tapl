@@ -1,4 +1,4 @@
-import { error, parseBasic, typeShow, parseBasic2, parseObj, parseTaggedUnion } from "npm:tiny-ts-parser";
+import { error, parseBasic, typeShow, parseBasic2, parseObj, parseTaggedUnion, parseRecFunc } from "npm:tiny-ts-parser";
 type Type =
 | { tag: "Boolean" }
 | { tag: "Number" }
@@ -24,6 +24,7 @@ type Term =
 | { tag: "objectGet"; obj: Term; propName: string }
 | { tag: "taggedUnionNew"; tagLabel: string; props: PropertyTerm[]; as: Type }
 | { tag: "taggedUnionGet"; varName: string; clauses: VariantTerm[] }
+| { tag: "recFunc"; funcName: string; paramas: Param[]; retType: Type; body: Term; rest: Term };
 
 type Param = { name: string; type: Type };
 type TypeEnv = Record<string, Type>;
@@ -120,6 +121,18 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
       }
       const retType = typecheck(t.body, newTyEnv);
       return  { tag: "Func", params: t.params, retType };
+    }
+    case "recFunc": {
+      const funcTy: Type = { tag: "Func", params: t.params, retType: t.retType };
+      const newTyEnv = { ...tyEnv };
+      for (const {name, type} of t.params) {
+        newTyEnv[name] = type;
+      }
+      newTyEnv[t.funcName] = funcTy;
+      const retType = typecheck(t.body, newTyEnv);
+      if(!typeEq(retType, t.retType)) error ("wrong return type", t);
+      const newerTyEnv2 = { ...tyEnv, [t.funcName]: funcTy };
+      return  typecheck(t.rest, newerTyEnv2);
     }
     case "call": {
       const funcTy = typecheck(t.func, tyEnv);
@@ -222,4 +235,34 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
     //   throw "unreachable";
   }
 }
-console.log(typecheck(parseBasic("const f = (x: number) => f(x);")), {});
+//console.log(typecheck(parseBasic("const f = (x: number) => f(x);")), {});
+console.log(typecheck(parseRecFunc(`function f(x: number): number { return f(x); } f(0)`), {}));
+
+// {
+//   tag: "recFunc",
+//   funcName: "f",
+//   params: [ { name: "x", type: { tag: "Number" } } ],
+//   retType: { tag: "Number" },
+//   body: {
+//     tag: "call",
+//     func: {
+//       tag: "var",
+//       name: "f",
+//       loc: { end: { column: 40, line: 1 }, start: { column: 39, line: 1 } }
+//     },
+//     args: [
+//       {
+//         tag: "var",
+//         name: "x",
+//         loc: { end: [Object], start: [Object] }
+//       }
+//     ],
+//     loc: { end: { column: 43, line: 1 }, start: { column: 39, line: 1 } }
+//   },
+//   rest: {
+//     tag: "var",
+//     name: "f",
+//     loc: { end: { column: 46, line: 1 }, start: { column: 0, line: 1 } }
+//   },
+//   loc: { end: { column: 46, line: 1 }, start: { column: 0, line: 1 } }
+// }
