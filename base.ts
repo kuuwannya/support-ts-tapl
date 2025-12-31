@@ -1,8 +1,10 @@
-import { error, parseBasic, typeShow, parseBasic2 } from "npm:tiny-ts-parser";
+import { error, parseBasic, typeShow, parseBasic2, parseObj, parseTaggedUnion } from "npm:tiny-ts-parser";
 type Type =
 | { tag: "Boolean" }
 | { tag: "Number" }
-| { tag: "Func"; params: Param[]; retType: Type };
+| { tag: "Func"; params: Param[]; retType: Type }
+| { tag: "Object"; props: PropertyType[] }
+| { tag: "TaggedUnion"; variants: VariantType[] };
 
 type Term =
 | { tag: "true" }
@@ -13,14 +15,47 @@ type Term =
 | { tag: "var"; name: string }
 | { tag: "func"; params: Param[]; body: Term }
 | { tag: "call"; func: Term; args: Term[] }
-//| { tag: "seq"; body: Term; rest: Term }
-//| { tag: "const"; name: string; init: Term; rest: Term }
-  //seq2: restがない const2: restがない
+| { tag: "seq"; body: Term; rest: Term }
+| { tag: "const"; name: string; init: Term; rest: Term }
+//seq2: restがない const2: restがない
 | { tag: "seq2"; body: Term[] }
-| { tag: "const2"; names: string[]; inits: Term[] };
+| { tag: "const2"; names: string[]; inits: Term[] }
+| { tag: "objectNew"; props: PropertyTerm[] }
+| { tag: "objectGet"; obj: Term; propName: string }
+| { tag: "taggedUnionNew"; tagLabel: string; props: PropertyTerm[]; as: Type }
+| { tag: "taggedUnionGet"; varName: string; clauses: VariantTerm[] }
 
 type Param = { name: string; type: Type };
 type TypeEnv = Record<string, Type>;
+type PropertyTerm = { name: string; term: Term };
+type PropertyType = { name: string; type: Type };
+type VariantType = { tagLabel: string; props: PropertyType[] };
+type VariantTerm = { tagLabel: string; term: Term };
+
+type NumOrBool = { tag: "num"; numVal: number } | { tag: "bool"; boolVal: boolean };
+
+const numOrBool42 = { tag: "num", numVal: 42 } satisfies NumOrBool;
+const numOrBoolTrue = { tag: "bool", boolVal: true } satisfies NumOrBool;
+
+const f = (x: NumOrBool) => {
+  switch (x.tag) {
+    case "num": {
+      return x.numVal
+    }
+    case "bool": {
+      return -1;
+    }
+  }
+};
+
+f(numOrBool42);
+f(numOrBoolTrue);
+
+//タグ付きunion型をサポート
+// { tag: 文字列, name1: 型; name2: 型; ...} satisfies タグ付きunion型
+// switch 変数名.tagのように分類
+// 指定されている型以外のもので定義してある場合はエラーが出る
+
 
 function typeEq(ty1: Type, ty2: Type): boolean {
   switch (ty2.tag) {
@@ -36,6 +71,15 @@ function typeEq(ty1: Type, ty2: Type): boolean {
       }
       if(!typeEq(ty1.retType, ty2.retType)) return false;
       return true;
+    case "Object":
+      if (ty1.tag !== "Object") return false;
+      if (ty1.props.length !== ty2.props.length) return false;
+      //propsにAのプロップスが全てできる
+      for (const prop2 of ty2.props) {
+        const prop1 = ty1.props.find((prop1) => prop1.name === prop2.name);
+        if (!prop1) return false;
+        if (!typeEq(prop1.type, prop2.type)) return false;
+      }
   }
 }
 
@@ -90,30 +134,92 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
       }
       return funcTy.retType;
     }
-    // case "seq": {
-    //   typecheck(t.body, tyEnv);
-    //   return typecheck(t.rest, tyEnv);
-    // }
-    // case "const": {
-    //   const ty = typecheck(t.init, tyEnv);
-    //   const newTyEnv = { ...tyEnv, [t.name]: ty };
-    //   return typecheck(t.rest, newTyEnv);
-    // }
-    case "seq2": {
-      let lastTy: Type | null = null;
-      for (const term of t.body) {
-        if (term.tag === "const2"){
-          const ty = typecheck(term.init, tyEnv);
-          tyEnv = { ...tyEnv, [term.name]: ty };
-        } else {
-          lastTy = typecheck(term, tyEnv);
+    case "seq": {
+      typecheck(t.body, tyEnv);
+      return typecheck(t.rest, tyEnv);
+    }
+    case "const": {
+      const ty = typecheck(t.init, tyEnv);
+      const newTyEnv = { ...tyEnv, [t.name]: ty };
+      return typecheck(t.rest, newTyEnv);
+    }
+    case "objectNew": {
+      const props = t.props.map
+      (({ name, term }) => ({name, type: typecheck(term, tyEnv) }));
+      //上記は省略形式
+      //((prop) => ({ name: prop.name, type: typecheck(prop.term, tyEnv) }));
+      return { tag: "Object", props };
+    }
+    case "objectGet": {
+      const objTy = typecheck(t.obj, tyEnv);
+      if (objTy.tag !== "Object") error("object type expected", t.obj);
+      const prop = objTy.props.find((prop) => prop.name === t.propName);
+      if (!prop) error(`unknown property name: ${t.propName}`, t);
+      return prop.type;
+    }
+    case "taggedUnionNew": {
+      const asTy = t.as; // 定義している型
+      //定義している型がunion型でない場合はエラー
+      if (asTy.tag !== "TaggedUnion") {
+        error(`"as" must have a tagged union type`, t);
+      }
+      const variant = asTy.variants.find((variant) => variant.tagLabel === t.tagLabel);
+      if (!variant) error (`unknown variant label: ${t.tagLabel}`, t);
+      //ここもオブジェクトと同じ。長さがいらないのは、union型でどっちかの値があれば良いから
+      for (const prop1 of t.props) {
+        const prop2 = variant.props.find((prop2) => prop2.name === prop1.name);
+        if (!prop2) error(`unknown property name: ${prop1.name}`, t);
+        const actualTy = typecheck(prop1.term, tyEnv);
+        if( !typeEq(actualTy, prop2.type)) {
+          error(`property type mismatch for property: ${prop1.name}`, prop1.term);
         }
       }
-      return lastTy!;
+      return t.as;
     }
-    case "const2":
-      throw "unreachable";
+    //getの時はどんな呼び出しになる？
+    case "taggedUnionGet": {
+      const variantTy = tyEnv[t.varName];
+      if (variantTy.tag !== "TaggedUnion") {
+        error(`variable: ${t.varName} must have a tagged union type`, t);
+      }
+      let retTy: Type | null = null;
+      for (const clause of t.clauses) {
+        const variant = variantTy.variants.find((variant) => variant.tagLabel === clause.tagLabel);
+        //variantが見つからなかったエラー
+        if(!variant) {
+          error(`tagged union has no case: ${clause.tagLabel}`, clause.term);
+        }
+        //型のチェック ???
+        const localTy: Type = { tag: "Object", props: variant.props };
+        const newTyEnv = { ...tyEnv, [t.varName]: localTy };
+        const clauseTy = typecheck(clause.term, newTyEnv);
+        if (retTy) {
+          if (!typeEq(retTy, clauseTy)) {
+            error("clauses has different type", clause.term);
+          } else {
+            retTy = clauseTy;
+          }
+        }
+      }
+      if(variantTy.variants.length !== t.clauses.length) {
+        error("switch case is not exhaustive", t);
+      }
+      return retTy!;
+    }
+    // case "seq2": {
+    //   let lastTy: Type | null = null;
+    //   for (const term of t.body) {
+    //     if (term.tag === "const2"){
+    //       const ty = typecheck(term.init, tyEnv);
+    //       tyEnv = { ...tyEnv, [term.name]: ty };
+    //     } else {
+    //       lastTy = typecheck(term, tyEnv);
+    //     }
+    //   }
+    //   return lastTy!;
+    // }
+    // case "const2":
+    //   throw "unreachable";
   }
 }
-
-console.log(typecheck(parseBasic2(`const x = 1;`), {}));
+console.log(parseTaggedUnion(`const numOrBool42 = { tag: "number", numVal: 42 } satisfies  { tag: "Number"; numVal: number} | { tag: "Boolean"; boolVal: boolean }; numOrBool42;`));
