@@ -222,4 +222,4 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
     //   throw "unreachable";
   }
 }
-console.log(parseTaggedUnion(`const numOrBool42 = { tag: "number", numVal: 42 } satisfies  { tag: "Number"; numVal: number} | { tag: "Boolean"; boolVal: boolean }; numOrBool42;`));
+console.log(typecheck(parseBasic("const f = (x: number) => f(x);")), {});
