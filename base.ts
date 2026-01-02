@@ -13,7 +13,7 @@ type Term =
 | { tag: "number"; n: number }
 | { tag: "add"; left: Term; right: Term }
 | { tag: "var"; name: string }
-| { tag: "func"; params: Param[]; body: Term }
+| { tag: "func"; params: Param[]; body: Term, retType: Type }
 | { tag: "call"; func: Term; args: Term[] }
 | { tag: "seq"; body: Term; rest: Term }
 | { tag: "const"; name: string; init: Term; rest: Term }
@@ -119,7 +119,9 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
       for (const {name, type} of t.params) {
         newTyEnv[name] = type;
       }
+      console.log("newTyEnv in func:", t.retType);
       const retType = typecheck(t.body, newTyEnv);
+      if (!typeEq(retType, t.retType)) error ("wrong return type", t);
       return  { tag: "Func", params: t.params, retType };
     }
     case "recFunc": {
@@ -236,33 +238,16 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
   }
 }
 //console.log(typecheck(parseBasic("const f = (x: number) => f(x);")), {});
-console.log(typecheck(parseRecFunc(`function f(x: number): number { return f(x); } f(0)`), {}));
+console.log(typecheck(parseRecFunc(`(n: number): boolean => 42`), {}));
 
 // {
-//   tag: "recFunc",
-//   funcName: "f",
-//   params: [ { name: "x", type: { tag: "Number" } } ],
-//   retType: { tag: "Number" },
+//   tag: "func",
+//   params: [ { name: "n", type: { tag: "Number" } } ],
+//   retType: { tag: "Boolean" },
 //   body: {
-//     tag: "call",
-//     func: {
-//       tag: "var",
-//       name: "f",
-//       loc: { end: { column: 40, line: 1 }, start: { column: 39, line: 1 } }
-//     },
-//     args: [
-//       {
-//         tag: "var",
-//         name: "x",
-//         loc: { end: [Object], start: [Object] }
-//       }
-//     ],
-//     loc: { end: { column: 43, line: 1 }, start: { column: 39, line: 1 } }
+//     tag: "number",
+//     n: 42,
+//     loc: { end: { column: 26, line: 1 }, start: { column: 24, line: 1 } }
 //   },
-//   rest: {
-//     tag: "var",
-//     name: "f",
-//     loc: { end: { column: 46, line: 1 }, start: { column: 0, line: 1 } }
-//   },
-//   loc: { end: { column: 46, line: 1 }, start: { column: 0, line: 1 } }
+//   loc: { end: { column: 26, line: 1 }, start: { column: 0, line: 1 } }
 // }
