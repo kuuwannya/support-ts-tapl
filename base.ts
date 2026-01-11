@@ -1,4 +1,4 @@
-import { error, parseBasic, typeShow, parseBasic2, parseObj, parseTaggedUnion } from "npm:tiny-ts-parser";
+import { error, parseBasic, typeShow, parseBasic2, parseObj, parseTaggedUnion, parseRecFunc } from "npm:tiny-ts-parser";
 type Type =
 | { tag: "Boolean" }
 | { tag: "Number" }
@@ -13,7 +13,7 @@ type Term =
 | { tag: "number"; n: number }
 | { tag: "add"; left: Term; right: Term }
 | { tag: "var"; name: string }
-| { tag: "func"; params: Param[]; body: Term }
+| { tag: "func"; params: Param[]; body: Term, retType: Type }
 | { tag: "call"; func: Term; args: Term[] }
 | { tag: "seq"; body: Term; rest: Term }
 | { tag: "const"; name: string; init: Term; rest: Term }
@@ -24,6 +24,7 @@ type Term =
 | { tag: "objectGet"; obj: Term; propName: string }
 | { tag: "taggedUnionNew"; tagLabel: string; props: PropertyTerm[]; as: Type }
 | { tag: "taggedUnionGet"; varName: string; clauses: VariantTerm[] }
+| { tag: "recFunc"; funcName: string; paramas: Param[]; retType: Type; body: Term; rest: Term };
 
 type Param = { name: string; type: Type };
 type TypeEnv = Record<string, Type>;
@@ -118,8 +119,22 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
       for (const {name, type} of t.params) {
         newTyEnv[name] = type;
       }
+      console.log("newTyEnv in func:", t.retType);
       const retType = typecheck(t.body, newTyEnv);
+      if (!typeEq(retType, t.retType)) error ("wrong return type", t);
       return  { tag: "Func", params: t.params, retType };
+    }
+    case "recFunc": {
+      const funcTy: Type = { tag: "Func", params: t.params, retType: t.retType };
+      const newTyEnv = { ...tyEnv };
+      for (const {name, type} of t.params) {
+        newTyEnv[name] = type;
+      }
+      newTyEnv[t.funcName] = funcTy;
+      const retType = typecheck(t.body, newTyEnv);
+      if(!typeEq(retType, t.retType)) error ("wrong return type", t);
+      const newerTyEnv2 = { ...tyEnv, [t.funcName]: funcTy };
+      return  typecheck(t.rest, newerTyEnv2);
     }
     case "call": {
       const funcTy = typecheck(t.func, tyEnv);
@@ -222,4 +237,17 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
     //   throw "unreachable";
   }
 }
-console.log(parseTaggedUnion(`const numOrBool42 = { tag: "number", numVal: 42 } satisfies  { tag: "Number"; numVal: number} | { tag: "Boolean"; boolVal: boolean }; numOrBool42;`));
+//console.log(typecheck(parseBasic("const f = (x: number) => f(x);")), {});
+console.log(typecheck(parseRecFunc(`(n: number): boolean => 42`), {}));
+
+// {
+//   tag: "func",
+//   params: [ { name: "n", type: { tag: "Number" } } ],
+//   retType: { tag: "Boolean" },
+//   body: {
+//     tag: "number",
+//     n: 42,
+//     loc: { end: { column: 26, line: 1 }, start: { column: 24, line: 1 } }
+//   },
+//   loc: { end: { column: 26, line: 1 }, start: { column: 0, line: 1 } }
+// }
