@@ -221,33 +221,6 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
       }
       return retTy!;
     }
-    // case "seq2": {
-    //   let lastTy: Type | null = null;
-    //   for (const term of t.body) {
-    //     if (term.tag === "const2"){
-    //       const ty = typecheck(term.init, tyEnv);
-    //       tyEnv = { ...tyEnv, [term.name]: ty };
-    //     } else {
-    //       lastTy = typecheck(term, tyEnv);
-    //     }
-    //   }
-    //   return lastTy!;
-    // }
-    // case "const2":
-    //   throw "unreachable";
   }
 }
-//console.log(typecheck(parseBasic("const f = (x: number) => f(x);")), {});
 console.log(typecheck(parseRecFunc(`(n: number): boolean => 42`), {}));
-
-// {
-//   tag: "func",
-//   params: [ { name: "n", type: { tag: "Number" } } ],
-//   retType: { tag: "Boolean" },
-//   body: {
-//     tag: "number",
-//     n: 42,
-//     loc: { end: { column: 26, line: 1 }, start: { column: 24, line: 1 } }
-//   },
-//   loc: { end: { column: 26, line: 1 }, start: { column: 0, line: 1 } }
-// }
