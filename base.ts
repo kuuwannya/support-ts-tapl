@@ -84,6 +84,26 @@ function typeEq(ty1: Type, ty2: Type): boolean {
   }
 }
 
+//2つの型が部分型であるかどうか
+function subtype(ty1: Type, ty2: Type): boolean {
+  switch (ty2.tag) {
+    case "Boolean":
+      return ty1.tag === "Boolean";
+    case "Number":
+      return ty1.tag === "Number";
+    case "Func":
+      if(ty1.tag !== "Func") return false;
+    case "Object":
+      if(ty1.tag !== "Object") return false;
+      for (const prop2 of ty2.props) {
+        const prop1 = ty1.props.find((prop1) => prop1.name === prop2.name);
+        if (!prop1) return false;
+        if (!subtype(prop1.type, prop2.type)) return false;
+      }
+      return true;
+  }
+}
+
 
 function typecheck(t: Term, tyEnv: TypeEnv): Type {
   switch (t.tag) {
