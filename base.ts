@@ -68,7 +68,6 @@ type VariantTerm = { tagLabel: string; term: Term };
 
 //2つの型が部分型であるかどうか
 function subtype(ty1: Type, ty2: Type): boolean {
-  console.log("subtype");
   switch (ty2.tag) {
     case "Boolean":
       return ty1.tag === "Boolean";
@@ -230,4 +229,4 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
     // }
   }
 }
-console.log(typecheck(parseSub(`const f = (x: { foo: number }) => x.foo; const x = { foo: 1, bar: true }; f(x);`), {}));
+console.log(typecheck(parseSub(`type F = () => { foo: number; bar: boolean }; const f = (x: F) => x().bar; const g = () => ({foo: 1}); f(g);`), {}));
