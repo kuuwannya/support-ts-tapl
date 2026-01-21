@@ -93,6 +93,12 @@ function subtype(ty1: Type, ty2: Type): boolean {
       return ty1.tag === "Number";
     case "Func":
       if(ty1.tag !== "Func") return false;
+      if(ty1.params.length !== ty2.params.length) return false;
+      for (let i = 0; i < ty1.params.length; i++) {
+        if (!subtype(ty1.params[i].type, ty2.params[i].type)) return false;  //反変
+      }
+      if (!subtype(ty1.retType, ty2.retType)) return false;
+      return true;
     case "Object":
       if(ty1.tag !== "Object") return false;
       for (const prop2 of ty2.props) {
