@@ -145,7 +145,6 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
       for (const {name, type} of t.params) {
         newTyEnv[name] = type;
       }
-      console.log("newTyEnv in func:", t.retType);
       const retType = typecheck(t.body, newTyEnv);
       if (!typeEq(retType, t.retType)) error ("wrong return type", t);
       return  { tag: "Func", params: t.params, retType };
@@ -168,8 +167,7 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
       if (funcTy.params.length !== t.args.length) error("wrong number of arguments", t);
       for (let i = 0; i < t.args.length; i++) {
         const argTy = typecheck(t.args[i], tyEnv);
-        const paramTy = funcTy.params[i].type;
-        if (!typeEq(argTy, paramTy)) {
+        if (!subtype(argTy, funcTy.params[i].type)) {
           error("parameter type mismatch", t.args[i]);
         }
       }
