@@ -4,7 +4,9 @@ type Type =
 | { tag: "Number" }
 | { tag: "Func"; params: Param[]; retType: Type }
 | { tag: "Object"; props: PropertyType[] }
-| { tag: "TaggedUnion"; variants: VariantType[] };
+| { tag: "TaggedUnion"; variants: VariantType[] }
+| { tag: "Rec"; name: string; type: Type }
+| { tag: "TypeVar"; name: string }
 
 type Term =
 | { tag: "true" }
@@ -17,7 +19,6 @@ type Term =
 | { tag: "call"; func: Term; args: Term[] }
 | { tag: "seq"; body: Term; rest: Term }
 | { tag: "const"; name: string; init: Term; rest: Term }
-//seq2: restがない const2: restがない
 | { tag: "seq2"; body: Term[] }
 | { tag: "const2"; names: string[]; inits: Term[] }
 | { tag: "objectNew"; props: PropertyTerm[] }
