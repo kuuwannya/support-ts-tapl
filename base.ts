@@ -92,7 +92,7 @@ function subtype(ty1: Type, ty2: Type): boolean {
       return true;
   }
 }
-//
+
 function expandType(ty: Type, tyVarName: string, repTy: Type): Type {
   switch (ty.tag) {
     case "Boolean":
@@ -111,6 +111,15 @@ function expandType(ty: Type, tyVarName: string, repTy: Type): Type {
       return { tag: "Rec", name: ty.name, type: newType };
     case "TypeVar":
       return (ty.name === tyVarName) ? repTy : ty;
+  }
+}
+
+function simplifyType(ty: Type){
+  switch (ty.tag) {
+    case "Rec":
+      return simplifyType(expandType(ty.type, ty.name, ty));
+    default:
+      return ty;
   }
 }
 
