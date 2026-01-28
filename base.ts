@@ -1,4 +1,4 @@
-import { error, parseBasic, typeShow, parseBasic2, parseObj, parseTaggedUnion, parseRecFunc, parseSub } from "npm:tiny-ts-parser";
+import { error, parseBasic, typeShow, parseBasic2, parseObj, parseTaggedUnion, parseRecFunc, parseSub, parseRec } from "npm:tiny-ts-parser";
 type Type =
 | { tag: "Boolean" }
 | { tag: "Number" }
@@ -230,4 +230,8 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
     // }
   }
 }
-console.log(typecheck(parseSub(`type F = () => { foo: number; bar: boolean }; const f = (x: F) => x().bar; const g = () => ({foo: 1}); f(g);`), {}));
+console.dir(parseRec(`
+  type X = { foo: X };
+
+  (arg: X) => 1;
+`), {depth: 7});
