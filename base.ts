@@ -70,6 +70,34 @@ function typeEqNative(ty1: Type, ty2: Type, map: Record<string, string>): boolea
   }
 }
 
+function typeEq(ty1: Type, ty2: Type): boolean {
+  if(ty1.tag === "Rec") return typeEq(simplifyType(ty1), ty2);
+  if(ty2.tag === "Rec") return typeEq(ty1, simplifyType(ty2));
+  switch(ty2.tag){
+    case "Boolean":
+      return ty1.tag === "Boolean";
+    case "Number":
+      return ty1.tag === "Number";
+    case "Func":
+      if (ty1.tag !== "Func") return false;
+      if (ty1.params.length !== ty2.params.length) return false;
+      for (let i = 0; i < ty1.params.length; i++) {
+        if (!typeEq(ty1.params[i].type, ty2.params[i].type)) return false;
+      }
+      if(!typeEq(ty1.retType, ty2.retType)) return false;
+      return true;
+    case "Object":
+      if (ty1.tag !== "Object") return false;
+      if (ty1.props.length !== ty2.props.length) return false;
+      //propsにAのプロップスが全てできる
+      for (const prop2 of ty2.props) {
+        const prop1 = ty1.props.find((prop1) => prop1.name === prop2.name);
+        if (!prop1) return false;
+        if (!typeEq(prop1.type, prop2.type)) return false;
+      }
+  }
+}
+
 //2つの型が部分型であるかどうか
 function subtype(ty1: Type, ty2: Type): boolean {
   switch (ty2.tag) {
