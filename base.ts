@@ -71,6 +71,7 @@ function typeEqNative(ty1: Type, ty2: Type, map: Record<string, string>): boolea
 }
 
 function typeEq(ty1: Type, ty2: Type): boolean {
+  if(typeEqNative(ty1,ty2, {})) return true;
   if(ty1.tag === "Rec") return typeEq(simplifyType(ty1), ty2);
   if(ty2.tag === "Rec") return typeEq(ty1, simplifyType(ty2));
   switch(ty2.tag){
