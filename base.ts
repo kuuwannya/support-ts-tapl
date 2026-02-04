@@ -40,32 +40,35 @@ type VariantTerm = { tagLabel: string; term: Term };
 // 指定されている型以外のもので定義してある場合はエラーが出る
 
 
-// function typeEq(ty1: Type, ty2: Type): boolean {
-//   console.log("typeEq");
-//   switch (ty2.tag) {
-//     case "Boolean":
-//       return ty1.tag === "Boolean";
-//     case "Number":
-//       return ty1.tag === "Number";
-//     case "Func":
-//       if (ty1.tag !== "Func") return false;
-//       if (ty1.params.length !== ty2.params.length) return false;
-//       for (let i = 0; i < ty1.params.length; i++) {
-//         if (!typeEq(ty1.params[i].type, ty2.params[i].type)) return false;
-//       }
-//       if(!typeEq(ty1.retType, ty2.retType)) return false;
-//       return true;
-//     case "Object":
-//       if (ty1.tag !== "Object") return false;
-//       if (ty1.props.length !== ty2.props.length) return false;
-//       //propsにAのプロップスが全てできる
-//       for (const prop2 of ty2.props) {
-//         const prop1 = ty1.props.find((prop1) => prop1.name === prop2.name);
-//         if (!prop1) return false;
-//         if (!typeEq(prop1.type, prop2.type)) return false;
-//       }
-//   }
-// }
+function typeEqNative(ty1: Type, ty2: Type, map: Record<string, string>): boolean {
+  switch (ty2.tag) {
+    case "Boolean":
+    case "Number":
+      return ty1.tag === ty2.tag;
+    case "Func":
+      if (ty1.tag !== "Func") return false;
+      if (ty1.params.length !== ty2.params.length) return false;
+      for (let i = 0; i < ty1.params.length; i++) {
+        if (!typeEqNative(ty1.params[i].type, ty2.params[i].type, map)) return false;
+      }
+      if(!typeEqNative(ty1.retType, ty2.retType, map)) return false;
+      return true;
+    case "Object":
+      if (ty1.tag !== "Object") return false;
+      if (ty1.props.length !== ty2.props.length) return false;
+      //propsにAのプロップスが全てできる
+      for (const prop2 of ty2.props) {
+        const prop1 = ty1.props.find((prop1) => prop1.name === prop2.name);
+        if (!prop1) return false;
+        if (!typeEqNative(prop1.type, prop2.type, map)) return false;
+      }
+      return true;
+    case "Rec":
+      if(ty1.tag !== "Rec") return false;
+      const newMap = {...map, [ty1.name]: ty2.name};
+      return typeEqNative(ty1.type, ty2.type, newMap);
+  }
+}
 
 //2つの型が部分型であるかどうか
 function subtype(ty1: Type, ty2: Type): boolean {
