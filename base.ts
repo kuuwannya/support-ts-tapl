@@ -23,16 +23,16 @@ type Term =
 | { tag: "const2"; names: string[]; inits: Term[] }
 | { tag: "objectNew"; props: PropertyTerm[] }
 | { tag: "objectGet"; obj: Term; propName: string }
-| { tag: "taggedUnionNew"; tagLabel: string; props: PropertyTerm[]; as: Type }
-| { tag: "taggedUnionGet"; varName: string; clauses: VariantTerm[] }
+// | { tag: "taggedUnionNew"; tagLabel: string; props: PropertyTerm[]; as: Type }
+// | { tag: "taggedUnionGet"; varName: string; clauses: VariantTerm[] }
 | { tag: "recFunc"; funcName: string; paramas: Param[]; retType: Type; body: Term; rest: Term };
 
 type Param = { name: string; type: Type };
 type TypeEnv = Record<string, Type>;
 type PropertyTerm = { name: string; term: Term };
 type PropertyType = { name: string; type: Type };
-type VariantType = { tagLabel: string; props: PropertyType[] };
-type VariantTerm = { tagLabel: string; term: Term };
+//type VariantType = { tagLabel: string; props: PropertyType[] };
+//type VariantTerm = { tagLabel: string; term: Term };
 
 //タグ付きunion型をサポート
 // { tag: 文字列, name1: 型; name2: 型; ...} satisfies タグ付きunion型
@@ -67,6 +67,13 @@ function typeEqNative(ty1: Type, ty2: Type, map: Record<string, string>): boolea
       if(ty1.tag !== "Rec") return false;
       const newMap = {...map, [ty1.name]: ty2.name};
       return typeEqNative(ty1.type, ty2.type, newMap);
+    case"TypeVar": {
+      if(ty1.tag !== "TypeVar") return false;
+      if(map[ty1.name] === undefined) {
+        throw new Error(`unbound type variable: ${ty1.name}`);
+      }
+      return map[ty1.name] === ty2.name;
+    }
   }
 }
 
@@ -123,7 +130,7 @@ function typeEqSub(ty1: Type, ty2: Type, seen: [Type, Type][]): boolean {
       }
       if (!typeEqSub(ty1.retType, ty2.retType, seen)) return false;
       return true;
-    case "Object":
+    case "Object": {
       if (ty1.tag !== "Object") return false;
       if (ty1.props.length !== ty2.props.length) return false;
       //propsにAのプロップスが全てできる
@@ -132,6 +139,8 @@ function typeEqSub(ty1: Type, ty2: Type, seen: [Type, Type][]): boolean {
         if (!prop1) return false;
         if (!typeEqSub(prop1.type, prop2.type, seen)) return false;
       }
+      return true;
+    }
     case "TypeVar":
       throw "unreachable";
   }
@@ -202,16 +211,16 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
       return { tag: "Boolean" };
     case "false":
       return { tag: "Boolean" };
-    // case "if": {
-    //   const condTy = typecheck(t.cond, tyEnv);
-    //   if (condTy.tag !== "Boolean") error("boolean type expected", t.cond);
-    //   const thnTy = typecheck(t.thn, tyEnv);
-    //   const elsTy = typecheck(t.els, tyEnv);
-    //   if (!typeEq(thnTy, elsTy)) {
-    //     error("then and else have different types", t);
-    //   }
-    //   return thnTy;
-    // }
+    case "if": {
+      const condTy = typecheck(t.cond, tyEnv);
+      if (condTy.tag !== "Boolean") error("boolean type expected", t.cond);
+      const thnTy = typecheck(t.thn, tyEnv);
+      const elsTy = typecheck(t.els, tyEnv);
+      if (!typeEq(thnTy, elsTy)) {
+        error("then and else have different types", t);
+      }
+      return thnTy;
+    }
     case "number":
       return { tag: "Number" };
     case "add": {
@@ -231,27 +240,26 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
         newTyEnv[name] = type;
       }
       const retType = typecheck(t.body, newTyEnv);
-      //if (!typeEq(retType, t.retType)) error ("wrong return type", t);
       return  { tag: "Func", params: t.params, retType };
     }
-    // case "recFunc": {
-    //   const funcTy: Type = { tag: "Func", params: t.params, retType: t.retType };
-    //   const newTyEnv = { ...tyEnv };
-    //   for (const {name, type} of t.params) {
-    //     newTyEnv[name] = type;
-    //   }
-    //   newTyEnv[t.funcName] = funcTy;
-    //   const retType = typecheck(t.body, newTyEnv);
-    //   if(!typeEq(retType, t.retType)) error ("wrong return type", t);
-    //   const newerTyEnv2 = { ...tyEnv, [t.funcName]: funcTy };
-    //   return  typecheck(t.rest, newerTyEnv2);
-    // }
+    case "recFunc": {
+      const funcTy: Type = { tag: "Func", params: t.params, retType: t.retType };
+      const newTyEnv = { ...tyEnv };
+      for (const {name, type} of t.params) {
+        newTyEnv[name] = type;
+      }
+      newTyEnv[t.funcName] = funcTy;
+      const retType = typecheck(t.body, newTyEnv);
+      if(!typeEq(retType, t.retType)) error ("wrong return type", t);
+      const newerTyEnv2 = { ...tyEnv, [t.funcName]: funcTy };
+      return  typecheck(t.rest, newerTyEnv2);
+    }
     case "call": {
-      const funcTy = typecheck(t.func, tyEnv);
+      const funcTy = simplifyType(typecheck(t.func, tyEnv));
       if (funcTy.tag !== "Func") error("function type expected", t.func);
       if (funcTy.params.length !== t.args.length) error("wrong number of arguments", t);
       for (let i = 0; i < t.args.length; i++) {
-        const argTy = typecheck(t.args[i], tyEnv);
+        const argTy = simplifyType(typecheck(t.args[i], tyEnv));
         if (!subtype(argTy, funcTy.params[i].type)) {
           error("parameter type mismatch", t.args[i]);
         }
@@ -270,70 +278,24 @@ function typecheck(t: Term, tyEnv: TypeEnv): Type {
     case "objectNew": {
       const props = t.props.map
       (({ name, term }) => ({name, type: typecheck(term, tyEnv) }));
-      //上記は省略形式
-      //((prop) => ({ name: prop.name, type: typecheck(prop.term, tyEnv) }));
       return { tag: "Object", props };
     }
     case "objectGet": {
-      const objTy = typecheck(t.obj, tyEnv);
+      const objTy = simplifyType(typecheck(t.obj, tyEnv));
       if (objTy.tag !== "Object") error("object type expected", t.obj);
       const prop = objTy.props.find((prop) => prop.name === t.propName);
       if (!prop) error(`unknown property name: ${t.propName}`, t);
       return prop.type;
     }
-    // case "taggedUnionNew": {
-    //   const asTy = t.as; // 定義している型
-    //   //定義している型がunion型でない場合はエラー
-    //   if (asTy.tag !== "TaggedUnion") {
-    //     error(`"as" must have a tagged union type`, t);
-    //   }
-    //   const variant = asTy.variants.find((variant) => variant.tagLabel === t.tagLabel);
-    //   if (!variant) error (`unknown variant label: ${t.tagLabel}`, t);
-    //   //ここもオブジェクトと同じ。長さがいらないのは、union型でどっちかの値があれば良いから
-    //   for (const prop1 of t.props) {
-    //     const prop2 = variant.props.find((prop2) => prop2.name === prop1.name);
-    //     if (!prop2) error(`unknown property name: ${prop1.name}`, t);
-    //     const actualTy = typecheck(prop1.term, tyEnv);
-    //     if( !typeEq(actualTy, prop2.type)) {
-    //       error(`property type mismatch for property: ${prop1.name}`, prop1.term);
-    //     }
-    //   }
-    //   return t.as;
-    // }
-    //getの時はどんな呼び出しになる？
-    // case "taggedUnionGet": {
-    //   const variantTy = tyEnv[t.varName];
-    //   if (variantTy.tag !== "TaggedUnion") {
-    //     error(`variable: ${t.varName} must have a tagged union type`, t);
-    //   }
-    //   let retTy: Type | null = null;
-    //   for (const clause of t.clauses) {
-    //     const variant = variantTy.variants.find((variant) => variant.tagLabel === clause.tagLabel);
-    //     //variantが見つからなかったエラー
-    //     if(!variant) {
-    //       error(`tagged union has no case: ${clause.tagLabel}`, clause.term);
-    //     }
-    //     //型のチェック ???
-    //     const localTy: Type = { tag: "Object", props: variant.props };
-    //     const newTyEnv = { ...tyEnv, [t.varName]: localTy };
-    //     const clauseTy = typecheck(clause.term, newTyEnv);
-    //     if (retTy) {
-    //       if (!typeEq(retTy, clauseTy)) {
-    //         error("clauses has different type", clause.term);
-    //       } else {
-    //         retTy = clauseTy;
-    //       }
-    //     }
-    //   }
-    //   if(variantTy.variants.length !== t.clauses.length) {
-    //     error("switch case is not exhaustive", t);
-    //   }
-    //   return retTy!;
-    // }
   }
 }
-console.dir(parseRec(`
-  type X = { foo: X };
-
-  (arg: X) => 1;
-`), {depth: 7});
+console.dir(typecheck(parseRec(`
+  type NumStream = { num: number; rest: () => NumStream };
+  function numbers(n: number): NumStream {
+    return { num: n, rest: () => numbers(n + 1) };
+  }
+  const ns1 = numbers(1);
+  const ns2 = (ns1.rest)();
+  const ns3 = (ns2.rest)();
+  ns3
+`), {}), {depth: null});
